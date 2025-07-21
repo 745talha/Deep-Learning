@@ -71,12 +71,13 @@ def plot_accuracy(train_acc_list, valid_acc_list, results_dir):
         plt.savefig(image_path)
 
 
-def show_examples(model, data_loader):
-
+def show_examples(model, data_loader, unnormalizer=None, class_dict=None):
+    
+        
     for batch_idx, (features, targets) in enumerate(data_loader):
 
         with torch.no_grad():
-            features = features.to('cuda:0')
+            features = features
             targets = targets
             logits = model(features)
             predictions = torch.argmax(logits, dim=1)
@@ -84,14 +85,34 @@ def show_examples(model, data_loader):
 
     fig, axes = plt.subplots(nrows=3, ncols=5,
                              sharex=True, sharey=True)
+    
+    if unnormalizer is not None:
+        for idx in range(features.shape[0]):
+            features[idx] = unnormalizer(features[idx])
+    nhwc_img = np.transpose(features, axes=(0, 2, 3, 1))
+    
+    if nhwc_img.shape[-1] == 1:
+        nhw_img = np.squeeze(nhwc_img.numpy(), axis=3)
 
-    nhwc_img = np.transpose(features.to('cpu'), axes=(0, 2, 3, 1))
-    nhw_img = np.squeeze(nhwc_img.numpy(), axis=3)
+        for idx, ax in enumerate(axes.ravel()):
+            ax.imshow(nhw_img[idx], cmap='binary')
+            if class_dict is not None:
+                ax.title.set_text(f'P: {class_dict[predictions[idx].item()]}'
+                                  f'\nT: {class_dict[targets[idx].item()]}')
+            else:
+                ax.title.set_text(f'P: {predictions[idx]} | T: {targets[idx]}')
+            ax.axison = False
 
-    for idx, ax in enumerate(axes.ravel()):
-        ax.imshow(nhw_img[idx], cmap='binary')
-        ax.title.set_text(f'P: {predictions[idx]} | T: {targets[idx]}')
-        ax.axison = False
+    else:
 
+        for idx, ax in enumerate(axes.ravel()):
+            ax.imshow(nhwc_img[idx])
+            if class_dict is not None:
+                ax.title.set_text(f'P: {class_dict[predictions[idx].item()]}'
+                                  f'\nT: {class_dict[targets[idx].item()]}')
+            else:
+                ax.title.set_text(f'P: {predictions[idx]} | T: {targets[idx]}')
+            ax.axison = False
     plt.tight_layout()
     plt.show()
+
