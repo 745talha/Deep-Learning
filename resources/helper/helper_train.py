@@ -1,6 +1,8 @@
 import time
 import torch
 from .helper_evaluation import compute_accuracy
+from .helper_evaluation import compute_epoch_loss_autoencoder
+from torch.nn import functional as F
 
 
 # def train_model(model, num_epochs, train_loader,
@@ -121,3 +123,62 @@ def train_model(model, num_epochs, train_loader,
     print(f'Test accuracy {test_acc :.2f}%')
 
     return minibatch_loss_list, train_acc_list, valid_acc_list
+
+
+
+def train_autoencoder(num_epochs, model, optimizer, device, 
+                         train_loader, loss_fn=None,
+                         logging_interval=100, 
+                         skip_epoch_stats=False,
+                         save_model=None):
+    
+    log_dict = {'train_loss_per_batch': [],
+                'train_loss_per_epoch': []}
+    
+    if loss_fn is None:
+        loss_fn = F.mse_loss
+
+    start_time = time.time()
+    for epoch in range(num_epochs):
+
+        model.train()
+        for batch_idx, (features, _) in enumerate(train_loader):
+
+            features = features.to(device)
+
+            # FORWARD AND BACK PROP
+            logits = model(features)
+            loss = loss_fn(logits, features)
+            optimizer.zero_grad()
+
+            loss.backward()
+
+            # UPDATE MODEL PARAMETERS
+            optimizer.step()
+
+            # LOGGING
+            log_dict['train_loss_per_batch'].append(loss.item())
+            
+            if not batch_idx % logging_interval:
+                print('Epoch: %03d/%03d | Batch %04d/%04d | Loss: %.4f'
+                      % (epoch+1, num_epochs, batch_idx,
+                          len(train_loader), loss))
+
+        if not skip_epoch_stats:
+            model.eval()
+            
+            with torch.set_grad_enabled(False):  # save memory during inference
+                
+                train_loss = compute_epoch_loss_autoencoder(
+                    model, train_loader, loss_fn, device)
+                print('***Epoch: %03d/%03d | Loss: %.3f' % (
+                      epoch+1, num_epochs, train_loss))
+                log_dict['train_loss_per_epoch'].append(train_loss.item())
+
+        print('Time elapsed: %.2f min' % ((time.time() - start_time)/60))
+
+    print('Total Training Time: %.2f min' % ((time.time() - start_time)/60))
+    if save_model is not None:
+        torch.save(model.state_dict(), save_model)
+    
+    return log_dict

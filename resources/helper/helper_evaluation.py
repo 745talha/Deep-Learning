@@ -78,3 +78,18 @@ def compute_confusion_matrix(model, data_loader, device):
         lst.append(z.count(combi))
     mat = np.asarray(lst)[:, None].reshape(n_labels, n_labels)
     return mat
+
+
+def compute_epoch_loss_autoencoder(model, data_loader, loss_fn, device):
+    model.eval()
+    curr_loss, num_examples = 0., 0
+    with torch.no_grad():
+        for features, _ in data_loader:
+            features = features.to(device)
+            logits = model(features)
+            loss = loss_fn(logits, features, reduction='sum')
+            num_examples += features.size(0)
+            curr_loss += loss
+
+        curr_loss = curr_loss / num_examples
+        return curr_loss
